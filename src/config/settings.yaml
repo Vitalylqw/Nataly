@@ -1,0 +1,36 @@
+provider:
+  default: local
+  fallback: cloud
+
+local:
+  model: large-v3
+  device: cuda
+  compute_type: float16
+  beam_size: 5
+
+cloud:
+  provider: openai
+  model: gpt-4o-mini-transcribe
+
+audio:
+  sample_rate: 16000
+  channels: 1
+  formats: ["ogg", "opus", "oga", "mp3", "m4a", "wav", "webm", "flac"]
+
+chunk:
+  max_sec: 90
+
+timeouts:
+  local_sec: 180
+  cloud_sec: 180
+
+paths:
+  ffmpeg_bin:
+  base_dir: var
+  inbox_dir: var/inbox
+  cache_dir: var/cache
+  out_dir: var/out
+  db_path: var/app.db
+  model_dir: var/models
+
+

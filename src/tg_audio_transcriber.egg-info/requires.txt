@@ -1,0 +1,11 @@
+aiogram>=3.4.1
+pydantic>=2.7.0
+python-dotenv>=1.0.1
+PyYAML>=6.0.1
+faster-whisper>=1.0.2
+openai>=1.45.0
+ffmpeg-python>=0.2.0
+
+[dev]
+ruff>=0.6.8
+pytest>=8.2.0
