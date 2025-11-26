@@ -46,7 +46,6 @@ def get_router(*, config: AppConfig, storage: Storage) -> Router:
 
 	async def _handle_audio(message: Message, bot: Bot, *, file_id: str, filename: str) -> None:
 		user_id = str(message.from_user.id) if message.from_user else "unknown"
-		chat_id = str(message.chat.id) if message.chat else "unknown"
 		message_id = message.message_id
 		
 		logger.info(f"Received audio from user {user_id}: {filename}")
@@ -128,6 +127,91 @@ def get_router(*, config: AppConfig, storage: Storage) -> Router:
 			await message.answer(error_msg)
 			await _save_response(message, error_msg, response_type="error")
 
+	async def _handle_video(message: Message, bot: Bot, *, file_id: str, filename: str) -> None:
+		"""Handle video file transcription by extracting audio track."""
+		user_id = str(message.from_user.id) if message.from_user else "unknown"
+		message_id = message.message_id
+		
+		logger.info(f"Received video from user {user_id}: {filename}")
+		
+		# Save transcription start event
+		try:
+			storage.save_event(
+				message_id=message_id,
+				user_id=user_id,
+				event_type="transcription_start",
+				details=json.dumps({"filename": filename, "file_id": file_id, "type": "video"}),
+			)
+		except Exception as exc:
+			logger.error(f"Error saving transcription_start event: {exc}", exc_info=True)
+		
+		inbox_dir = Path(config.paths.inbox_dir)
+		stem = safe_stem(filename)
+		src_path = inbox_dir / f"{stem}"
+		# keep original extension if possible
+		if "." in filename:
+			src_path = src_path.with_suffix("." + filename.rsplit(".", 1)[-1])
+		
+		logger.debug(f"Downloading video file {file_id} to {src_path}")
+		await _download_by_file_id(bot, file_id, src_path)
+
+		processing_msg = "Обрабатываю видео…"
+		await message.answer(processing_msg)
+		await _save_response(message, processing_msg, response_type="processing")
+		
+		try:
+			res = tr_router.transcribe(src_path, message_id=message_id, user_id=user_id)
+			text = res.text or "(пусто)"
+			logger.info(
+				f"Video transcription successful for user {user_id}. "
+				f"Provider: {res.provider}, Language: {res.language}, Length: {len(text)} chars"
+			)
+			
+			# Save transcription success event
+			try:
+				storage.save_event(
+					message_id=message_id,
+					user_id=user_id,
+					event_type="transcription_success",
+					details=json.dumps({
+						"provider": res.provider,
+						"language": res.language,
+						"text_length": len(text),
+						"type": "video",
+					}),
+				)
+			except Exception as exc:
+				logger.error(f"Error saving transcription_success event: {exc}", exc_info=True)
+			
+			# Telegram message limit ~4096 chars; send by chunks
+			prefix = "Расшифровка видео: \n"
+			chunk_size = 3500 - len(prefix)
+			for i in range(0, len(text), chunk_size):
+				chunk = text[i : i + chunk_size]
+				if i == 0:
+					response_text = f"{prefix}'{chunk}'"
+				else:
+					response_text = chunk
+				await message.answer(response_text)
+				await _save_response(message, response_text, response_type="text")
+		except Exception as exc:
+			logger.error(f"Video transcription failed for user {user_id}: {exc}", exc_info=True)
+			
+			# Save transcription error event
+			try:
+				storage.save_event(
+					message_id=message_id,
+					user_id=user_id,
+					event_type="transcription_error",
+					details=json.dumps({"error": str(exc), "type": "video"}),
+				)
+			except Exception as save_exc:
+				logger.error(f"Error saving transcription_error event: {save_exc}", exc_info=True)
+			
+			error_msg = f"Ошибка обработки видео: {exc}"
+			await message.answer(error_msg)
+			await _save_response(message, error_msg, response_type="error")
+
 	@router.message(Command("start"))
 	async def cmd_start(message: Message) -> None:
 		user_id = str(message.from_user.id) if message.from_user else "unknown"
@@ -145,7 +229,7 @@ def get_router(*, config: AppConfig, storage: Storage) -> Router:
 			logger.error(f"Error saving command_start event: {exc}", exc_info=True)
 		
 		response_text = (
-			"👋 Привет! Отправьте голос или аудиофайл — верну текст.\n"
+			"👋 Привет! Отправьте голос, аудио или видео — верну текст.\n"
 			"/help — помощь, /settings — настройки"
 		)
 		await message.answer(response_text)
@@ -167,8 +251,9 @@ def get_router(*, config: AppConfig, storage: Storage) -> Router:
 			logger.error(f"Error saving command_help event: {exc}", exc_info=True)
 		
 		response_text = (
-			"Отправьте voice, аудио (ogg/mp3/m4a/wav/webm/flac) или video note.\n"
-			"Я определю язык и верну транскрипт.\n"
+			"Отправьте voice, аудио (ogg/mp3/m4a/wav/webm/flac), "
+			"видео (mp4/avi/mov/mkv/webm) или video note.\n"
+			"Я извлеку аудиодорожку, определю язык и верну транскрипт.\n"
 			"По умолчанию использую локальную модель, при ошибках — резерв OpenAI."
 		)
 		await message.answer(response_text)
@@ -207,19 +292,29 @@ def get_router(*, config: AppConfig, storage: Storage) -> Router:
 			file_id = message.audio.file_id
 			filename = message.audio.file_name or f"audio_{message.audio.file_unique_id}.mp3"
 			return await _handle_audio(message, bot, file_id=file_id, filename=filename)
+		# video
+		if message.video:
+			file_id = message.video.file_id
+			filename = message.video.file_name or f"video_{message.video.file_unique_id}.mp4"
+			return await _handle_video(message, bot, file_id=file_id, filename=filename)
 		# video note (circle)
 		if message.video_note:
 			file_id = message.video_note.file_id
 			filename = f"videonote_{message.video_note.file_unique_id}.mp4"
 			return await _handle_audio(message, bot, file_id=file_id, filename=filename)
-		# documents that may contain audio
-		if message.document and _is_audio_document(message.document):
-			file_id = message.document.file_id
-			filename = message.document.file_name or f"doc_{message.document.file_unique_id}"
-			return await _handle_audio(message, bot, file_id=file_id, filename=filename)
+		# documents that may contain audio or video
+		if message.document:
+			is_audio = _is_audio_document(message.document)
+			is_video = _is_video_document(message.document)
+			if is_audio or is_video:
+				file_id = message.document.file_id
+				filename = message.document.file_name or f"doc_{message.document.file_unique_id}"
+				if is_video:
+					return await _handle_video(message, bot, file_id=file_id, filename=filename)
+				return await _handle_audio(message, bot, file_id=file_id, filename=filename)
 		
-		# Handle non-audio messages
-		response_text = "Ожидается звуковой файл или сообщение голосом"
+		# Handle non-audio/video messages
+		response_text = "Ожидается звуковой файл, видео или сообщение голосом"
 		await message.answer(response_text)
 		await _save_response(message, response_text, response_type="info")
 
@@ -229,6 +324,16 @@ def get_router(*, config: AppConfig, storage: Storage) -> Router:
 		if doc.file_name:
 			ext = doc.file_name.lower().rsplit(".", 1)[-1] if "." in doc.file_name else ""
 			return ext in set(config.audio.formats)
+		return False
+
+	def _is_video_document(doc: Document) -> bool:
+		"""Check if document is a video file."""
+		if doc.mime_type and doc.mime_type.startswith("video/"):
+			return True
+		if doc.file_name:
+			ext = doc.file_name.lower().rsplit(".", 1)[-1] if "." in doc.file_name else ""
+			video_extensions = {"mp4", "avi", "mov", "mkv", "webm", "flv", "wmv", "m4v", "3gp"}
+			return ext in video_extensions
 		return False
 
 	return router
