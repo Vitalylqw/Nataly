@@ -6,6 +6,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 
+from src.bot.middleware import MessageLoggingMiddleware
 from src.bot.router import get_router
 from src.core.config import load_config
 from src.core.logging import setup_logging
@@ -33,14 +34,17 @@ async def main() -> None:
 		token=config.telegram_token,
 		default=DefaultBotProperties(parse_mode=ParseMode.HTML)
 	)
-	dp = Dispatcher(storage=MemoryStorage())
-	dp.include_router(get_router(config=config))
-
+	
 	# Ensure storage and runtime dirs
 	storage = Storage(config)
 	storage.ensure_runtime_dirs()
 	storage.init_db()
 	logger.info("Storage initialized")
+	
+	# Setup dispatcher with middleware
+	dp = Dispatcher(storage=MemoryStorage())
+	dp.message.middleware(MessageLoggingMiddleware(storage=storage))
+	dp.include_router(get_router(config=config, storage=storage))
 
 	# Minimal bot commands
 	await bot.set_my_commands(

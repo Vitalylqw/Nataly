@@ -35,3 +35,14 @@
 - **Dependencies**: Обновлен `requirements.txt` для соответствия текущему окружению (aiogram 3.22.0, pydantic 2.x).
 - **Status**: Приложение запущено в режиме Polling, транскрибация работает на GPU (при наличии CUDA) и CPU.
 - **Project Structure**: Финализация структуры скриптов (debug, servises), обновление .gitignore (исключение артефактов тестов, venv), удаление устаревшего скрипта покрытия.
+
+2025-01-XX
+- **Feature Planning**: Создан план реализации сохранения всех сообщений и действий с ботом (`project_progress/06_message_logging_plan.md`).
+- **Branch**: Создана ветка `feature/message-logging` для разработки функционала логирования.
+- **Plan**: Определена архитектура БД (таблицы `messages`, `bot_responses`, `events`), этапы реализации (5 этапов), типы сообщений и событий.
+- **Database Schema**: Расширена схема БД - добавлены таблицы `messages`, `bot_responses`, `events` с индексами для производительности. Обновлена таблица `transcripts` (добавлены поля `message_id`, `user_id`).
+- **Storage**: Добавлены методы `save_message()`, `save_bot_response()`, `save_event()`, `get_message_by_id()`, `get_user_messages()`, `get_user_responses()`, `get_user_events()`. Обновлен `save_transcript()` для поддержки `message_id` и `user_id`.
+- **Middleware**: Создан `MessageLoggingMiddleware` для автоматического сохранения всех входящих сообщений (команды, текст, голос, аудио, документы).
+- **Bot Integration**: Обновлен `bot/router.py` для сохранения ответов бота и событий (команды, транскрипция, ошибки). Интегрирован middleware в `app.py`.
+- **Transcription Router**: Обновлен метод `transcribe()` для поддержки опциональных параметров `message_id` и `user_id` (обратная совместимость сохранена).
+- **Tests**: Добавлены unit-тесты для новых методов Storage (9 тестов, все проходят).

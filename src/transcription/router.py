@@ -49,7 +49,9 @@ class TranscriptionRouter:
 	def _call_provider_with_timeout(self, provider: TranscriptionProvider, wav: Path, timeout: int):
 		return self._run_with_timeout(lambda: provider.transcribe(wav), timeout=timeout)
 
-	def transcribe(self, src_audio_path: Path) -> TranscriptionResult:
+	def transcribe(
+		self, src_audio_path: Path, message_id: int | None = None, user_id: str | None = None
+	) -> TranscriptionResult:
 		"""Convert to wav 16k mono, optionally chunk, then transcribe via selected provider.
 
 		Fallback: if default provider fails or times out, and fallback=cloud -> try cloud.
@@ -154,6 +156,8 @@ class TranscriptionRouter:
 			language=result.language,
 			text=result.text,
 			provider=result.provider,
+			message_id=message_id,
+			user_id=user_id,
 		)
 		logger.info(
 			f"Transcription saved to cache. Language: {result.language}, "
