@@ -100,10 +100,16 @@ def get_router(*, config: AppConfig, storage: Storage) -> Router:
 				logger.error(f"Error saving transcription_success event: {exc}", exc_info=True)
 			
 			# Telegram message limit ~4096 chars; send by chunks
-			for i in range(0, len(text), 3500):
-				chunk = text[i : i + 3500]
-				await message.answer(chunk)
-				await _save_response(message, chunk, response_type="text")
+			prefix = "Расшифровка звуковго файла: \n"
+			chunk_size = 3500 - len(prefix)
+			for i in range(0, len(text), chunk_size):
+				chunk = text[i : i + chunk_size]
+				if i == 0:
+					response_text = f"{prefix}'{chunk}'"
+				else:
+					response_text = chunk
+				await message.answer(response_text)
+				await _save_response(message, response_text, response_type="text")
 		except Exception as exc:
 			logger.error(f"Transcription failed for user {user_id}: {exc}", exc_info=True)
 			
@@ -211,6 +217,11 @@ def get_router(*, config: AppConfig, storage: Storage) -> Router:
 			file_id = message.document.file_id
 			filename = message.document.file_name or f"doc_{message.document.file_unique_id}"
 			return await _handle_audio(message, bot, file_id=file_id, filename=filename)
+		
+		# Handle non-audio messages
+		response_text = "Ожидается звуковой файл или сообщение голосом"
+		await message.answer(response_text)
+		await _save_response(message, response_text, response_type="info")
 
 	def _is_audio_document(doc: Document) -> bool:
 		if doc.mime_type and doc.mime_type.startswith("audio/"):
