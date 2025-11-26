@@ -61,12 +61,47 @@ class MessageLoggingMiddleware(BaseMiddleware):
 				file_unique_id = message.audio.file_unique_id
 				filename = message.audio.file_name
 				mime_type = message.audio.mime_type
+			elif message.video:
+				message_type = "video"
+				file_id = message.video.file_id
+				file_unique_id = message.video.file_unique_id
+				filename = message.video.file_name
+				mime_type = message.video.mime_type
+				content = message.caption
 			elif message.video_note:
 				message_type = "video_note"
 				file_id = message.video_note.file_id
 				file_unique_id = message.video_note.file_unique_id
 				filename = f"videonote_{file_unique_id}.mp4"
 				mime_type = "video/mp4"
+			elif message.photo:
+				message_type = "photo"
+				# Get largest photo size
+				largest_photo = max(message.photo, key=lambda p: p.width * p.height)
+				file_id = largest_photo.file_id
+				file_unique_id = largest_photo.file_unique_id
+				ext = "jpg"
+				if largest_photo.file_path:
+					ext = largest_photo.file_path.rsplit(".", 1)[-1] if "." in largest_photo.file_path else "jpg"
+				filename = f"photo_{file_unique_id}.{ext}"
+				mime_type = "image/jpeg"
+				content = message.caption
+			elif message.sticker:
+				message_type = "sticker"
+				file_id = message.sticker.file_id
+				file_unique_id = message.sticker.file_unique_id
+				ext = "webp"
+				if message.sticker.mime_type:
+					ext = message.sticker.mime_type.split("/")[-1] if "/" in message.sticker.mime_type else "webp"
+				filename = f"sticker_{file_unique_id}.{ext}"
+				mime_type = message.sticker.mime_type or "image/webp"
+			elif message.animation:
+				message_type = "animation"
+				file_id = message.animation.file_id
+				file_unique_id = message.animation.file_unique_id
+				filename = message.animation.file_name or f"animation_{file_unique_id}.gif"
+				mime_type = message.animation.mime_type or "video/mp4"
+				content = message.caption
 			elif message.document:
 				message_type = "document"
 				file_id = message.document.file_id

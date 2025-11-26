@@ -55,3 +55,18 @@
 - **Helper Function**: Добавлена функция `_is_video_document()` для определения видео документов по mime_type и расширению файла.
 - **User Messages**: Обновлены сообщения `/start` и `/help` для упоминания поддержки видео.
 - **Events**: Обновлено логирование событий транскрибации для различения типа медиа (аудио/видео).
+
+2025-01-XX
+- **Feature: Save All Files to Inbox**: Добавлено сохранение всех типов файлов в `var/inbox`.
+- **Branch**: Создана ветка `feature/save-all-files-to-inbox` для решения проблемы.
+- **File Saving**: Добавлена универсальная функция `_save_file_to_inbox()` для сохранения любых файлов.
+- **Supported Types**: Теперь сохраняются photo, sticker, animation и все документы (не только аудио/видео).
+- **Middleware**: Обновлен `MessageLoggingMiddleware` для поддержки новых типов сообщений (photo, sticker, animation, video).
+- **Analysis**: Создан документ `project_progress/07_file_saving_analysis.md` с анализом проблемы и вариантами оптимизации.
+
+2025-01-XX
+- **Feature: Save Transcription Results to JSON**: Добавлено сохранение результатов транскрибации в JSON файлы.
+- **Output Directory**: Реализовано использование папки `var/out` для сохранения результатов транскрибации.
+- **JSON Format**: Результаты сохраняются в формате JSON с метаданными (filename, file_id, message_id, user_id, timestamp), данными транскрибации (text, language, provider) и сегментами с таймкодами.
+- **Bot Router**: Добавлена функция `_save_transcription_to_json()` для сохранения результатов в `var/out`.
+- **Integration**: Функция вызывается после успешной транскрибации в `_handle_audio()` и `_handle_video()`.
